@@ -1,5 +1,7 @@
-# 📹 Motion Detection and Email Alert System
-A lightweight, Python-based computer vision application that monitors a live webcam feed for motion. When an object enters the frame, the system tracks it, captures a series of images, and automatically sends an email alert with a captured snapshot once the object leaves the camera's view.
+# 📹 Smart Security: Motion Detection & Automated Alert System
+A lightweight, automated computer vision application built in Python. This system monitors a live webcam feed for unauthorized motion, dynamically tracks moving objects, captures physical evidence, and dispatches automated email alerts with image attachments in real time.
+
+Designed for low-overhead security monitoring, it leverages OpenCV for frame analysis and Python's native threading to ensure the video feed remains uninterrupted while network tasks execute in the background.
 
 ### 📸 Project Screenshots
 <img width="1687" height="673" alt="Screenshot 2026-05-29 131127" src="https://github.com/user-attachments/assets/f1633113-d6d6-4bdd-b857-f21ad44c9061" />
@@ -17,71 +19,75 @@ A lightweight, Python-based computer vision application that monitors a live web
  
   <img width="1894" height="809" alt="Screenshot 2026-05-29 131534" src="https://github.com/user-attachments/assets/9116c76e-4452-4747-83ab-15aef93fff10" />
 
+## 🚀 Key Features
+Real-Time Frame Differencing: Utilizes OpenCV background subtraction, Gaussian blurring, and thresholding to filter out noise and isolate genuine physical movement.
 
-## *✨ Key Features*
-## 🎯 Real-Time Motion Detection:
-Utilizes OpenCV for frame differencing, Gaussian blurring, and contour detection to accurately identify moving objects.
+Intelligent Object Tracking: Maps extreme outer contours and draws dynamic bounding boxes around moving targets in the live feed.
 
-## 📧 Automated Email Alerts:
-Sends an email with an attached image of the detected object using background threading, ensuring the video feed remains uninterrupted.
+Asynchronous Alerting: Employs Python threading to dispatch SMTP email alerts with image attachments without blocking or lagging the primary video capture loop.
 
-## 🟩 Dynamic Tracking:
-Draws precise green bounding boxes around moving objects in the live video feed.
+Automated Evidence Management: Captures a sequence of frames while the subject is in view, emails the optimal median frame, and automatically cleans up local storage once the alert is sent.
 
-## 🧹 Automated Cleanup:
-Automatically clears locally saved image frames after the background process is complete to save disk space.
+## 🛠️ System Architecture
+The project is divided into two primary modules:
 
-## ⚙️ Prerequisites
-Ensure you have Python 3.x installed on your system. The script relies on the following standard and external libraries:
+main.py: The core computer vision engine. Handles the video stream, mathematical frame comparison, contour mapping, image saving, and thread management.
 
-opencv-python
+email.py: The notification engine. Establishes a secure TLS-encrypted connection with Gmail's SMTP servers to format and dispatch the alert payload.
 
-time (Standard Library)
+## ⚙️ Prerequisites & Setup
+Ensure you have Python 3.9+ installed.
 
-glob (Standard Library)
-
-os (Standard Library)
-
-threading (Standard Library)
-
-⚠️ Note: The script imports a custom function send_email from a local emailing.py file. You will need to configure this file with your specific SMTP server and email credentials for the alerts to work.
-
-### 🚀 Installation
 1. Clone the repository
 
 ```Bash
 git clone https://github.com/Nayanxyz/webcam-motion-alert.git
-
 cd webcam-motion-alert
 ```
 2. Install dependencies
 
 ```Bash
-pip install opencv-python
+pip install opencv-python python-dotenv
 ```
-3. Configure the Email Module
-Ensure you have an emailing.py file in the root directory with a send_email(image_path) function configured to handle your specific email provider's SMTP protocol.
+(Note: os, time, glob, threading, smtplib, and email are part of the Python Standard Library).
+
+3. Configure Environment Variables (Security)
+Never hardcode your email credentials. Create a .env file in the root directory of the project:
+
+Code snippet
+```
+SENDER_EMAIL="your_email@gmail.com"
+RECEIVER_EMAIL="target_email@gmail.com"
+EMAIL_PASSWORD="your_google_app_password"
+```
+Note: If using Gmail, you must generate an App Password via your Google Account Security settings; standard account passwords will not work for SMTP connections.
 
 ## 💻 Usage
-Execute the main Python script to start the webcam feed and motion detection:
+Execute the main engine to initialize the camera feed and begin monitoring:
 
-```Bash
-python main.py
-```
-## 🎮 Controls:
+Bash
+```python main.py```
+## Operational Controls:
 
-Press the q key while the video window is active to safely terminate the application and trigger the final folder cleanup.
+The system will open a window displaying the live feed with tracking enabled.
 
-## 🧠 How It Works
-Baseline Generation: The script captures the first frame, converts it to grayscale, and applies a Gaussian blur to serve as the static background baseline.
+Press the q key while the video window is active to safely terminate the process and trigger the final storage cleanup thread.
 
-Delta Calculation: Subsequent frames are compared against the baseline using absolute difference (cv2.absdiff).
+## 🧠 Algorithmic Flow
+Baseline Initialization: The system captures the initial frame, converts it to grayscale, and applies a 21x21 Gaussian blur to establish a static environmental baseline.
 
-Thresholding & Dilation: The difference is converted into a binary image and dilated to fill in gaps, making object detection cleaner.
+Delta Calculation: Subsequent frames are continuously compared against the baseline using cv2.absdiff().
 
-Contour Mapping: The script finds the contours of the dilated image. If a contour exceeds 5000 pixels, it is flagged as a valid moving object.
+Binary Thresholding & Dilation: The absolute difference is converted into a binary matrix (black/white) and dilated to fill structural holes, solidifying the object's mass.
 
-Image Capture & Emailing: Images are saved locally while the object is in the frame. When the object exits, a background thread selects the median image from the sequence and emails it.
+Contour Extraction: cv2.findContours() maps the boundaries. Noise is filtered out by ignoring contours with an area of less than 5000 pixels.
+
+State Machine & Threading: * State 0 (Idle): No motion.
+
+State 1 (Active): Object detected. Images are continuously saved to /images.
+
+State Transition (1 -> 0): Object exits the frame. A daemon thread is spawned to email the median image, while a secondary thread flushes the local /images directory.
 
 ## 📜 License
 Distributed under the MIT License. See LICENSE for more information.
+
