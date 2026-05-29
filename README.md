@@ -65,8 +65,9 @@ Note: If using Gmail, you must generate an App Password via your Google Account 
 ## 💻 Usage
 Execute the main engine to initialize the camera feed and begin monitoring:
 
-Bash
-```python main.py```
+```Bash
+python main.py
+```
 ## Operational Controls:
 
 The system will open a window displaying the live feed with tracking enabled.
