@@ -17,6 +17,8 @@ def clean_folder():                                                             
     for image in images:
         os.remove(image)
 
+clean_folder()
+
 
 while True:
     status = 0
@@ -80,6 +82,8 @@ while True:
         break
 
 video.release()
+
+clean_folder()
 
 clean_thread.start()                                                                            # cleared folder after sending image
 
