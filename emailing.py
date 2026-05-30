@@ -3,15 +3,15 @@ import smtplib                                                          # smtpli
                                                                         # It supports sending plain-text, HTML, and multipart messages with attachments,
                                                                         # typically requiring a secure connection via SMTP_SSL or starttls()
 
-import imghdr                                                           # imghdr / a lightweight Python standard library module used to identify
-                                                                        # the file format of an image by examining the
-                                                                        # first few bytes (the header) of a file or byte stream
+import imghdr                                                                   # imghdr / a lightweight Python standard library module used to identify
+import os                                                                       # the file format of an image by examining the
+from dotenv import load_dotenv                                                   # first few bytes (the header) of a file or byte stream
 
 
-
-PASSWORD =""
+load_dotenv()
+PASSWORD = os.getenv("GMAIL_PASSWORD")
 SENDER = "nayan7857@gmail.com"
-RECIEVER = "nayanxyz0@gmail.com"
+RECEIVER = "nayanxyz0@gmail.com"
 
 
 def send_email(image_path):
@@ -29,7 +29,7 @@ def send_email(image_path):
 
     gmail.starttls()                                                     #to upgrade an insecure SMTP connection to a secure one using Transport Layer Security (TLS).
     gmail.login(SENDER, PASSWORD)
-    gmail.sendmail(SENDER, RECIEVER, email_message.as_string())
+    gmail.sendmail(SENDER, RECEIVER, email_message.as_string())
     gmail.quit()
 
 if __name__ == "__main__":
