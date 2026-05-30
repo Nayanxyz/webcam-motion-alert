@@ -1,89 +1,76 @@
-import cv2    #open library
+import cv2
+import av
 import time
-import glob                                                                               # a pattern-matching syntax used to locate files and directories in a filesystem
-from emailing import send_email
-import os
-from threading import Thread
-
-video = cv2.VideoCapture(0)                                                                    # class ,used to capture video from a camera or read video files
-time.sleep(1)                                                                                  # time delay 1 second, Pauses the current thread
-first_frame = None                                                                             # first frame created to compare other frames
-
-status_list = []
-count = 1                                                                                      # given name to 1st image (1.png)
-
-def clean_folder():                                                                            # to clear folder
-    images = glob.glob("images/*.png")
-    for image in images:
-        os.remove(image)
-
-clean_folder()
+import threading
+import streamlit as st
+from streamlit_webrtc import webrtc_streamer, VideoProcessorBase
+from emailing import send_email  # This is your updated emailing.py
 
 
-while True:
-    status = 0
-    check, frame = video.read()                                                                # frames in BGR
-    grey_frame = cv2.cvtColor(frame , cv2.COLOR_BGR2GRAY)
-    grey_frame_gau = cv2.GaussianBlur(grey_frame, (21,21), 0)                      #gaussian blur to blur grey frame/ 21,21 amount of blur/ 0 is standard deviation
+class MotionProcessor(VideoProcessorBase):
+    def __init__(self):
+        # 1. State Variables
+        self.first_frame = None
+        self.last_email_time = 0  # Initialize to 0 so the very first motion triggers an email
+        self.cooldown = 60  # Wait 60 seconds between emails. Adjust as needed.
 
-    if first_frame is None:                                                                    # we gave first_frame = not going to change after the while loop executes one time,
-        first_frame = grey_frame_gau
+    def recv(self, frame: av.VideoFrame) -> av.VideoFrame:
+        img = frame.to_ndarray(format="bgr24")
 
-    delta_frame = cv2.absdiff(first_frame, grey_frame_gau)                                     # absolute difference method to create new frame after two previous frame
+        # OpenCV Math
+        grey_frame = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        grey_frame_gau = cv2.GaussianBlur(grey_frame, (21, 21), 0)
 
-    thresh_frame = cv2.threshold(delta_frame, 60 , 255, cv2.THRESH_BINARY)[1]    # This process, known as thresholding, converts a grayscale image into a binary
-                                                                                               # [] thresh frame is a list , extract [1] value
-    dil_frame = cv2.dilate(thresh_frame,None, iterations=2)                             # coverts object to bright light and bg to black to fill holes in image
-                                                                                               # configuration is None , iterations, the higher we go ,
-                                                                                               # more processing will applied to the method
-    cv2.imshow("my video", dil_frame)                                                  # to see frames
+        if self.first_frame is None:
+            self.first_frame = grey_frame_gau
+            return av.VideoFrame.from_ndarray(img, format="bgr24")
 
-    contours, check = cv2.findContours(dil_frame, cv2.RETR_EXTERNAL,  cv2.CHAIN_APPROX_SIMPLE)   # contour means shape of outer surface / RETR_EXTERNAL, used to retrieve only
-                                                                                                 # extreme outer surfaces or contours / chain_approx_simple reduces the number of points
-                                                                                                # stored for a contour, focusing on structural vertices (corners)
+        delta_frame = cv2.absdiff(self.first_frame, grey_frame_gau)
+        thresh_frame = cv2.threshold(delta_frame, 60, 255, cv2.THRESH_BINARY)[1]
+        dil_frame = cv2.dilate(thresh_frame, None, iterations=2)
+        contours, _ = cv2.findContours(dil_frame, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
-    for contour in contours:
-        if cv2.contourArea(contour) < 5000:
-            continue
-        x, y, w, h = cv2.boundingRect(contour)                                                   # x ,y points of rectangle , w width, h height
-        rectangle = cv2.rectangle(frame, (x, y), (x+w, y+h), (0, 255, 0), 3)                     # x+w is rectangle  expand as per object ,(0, 255, 0) Green rectangle, 3 is width
+        # 2. Motion Tracking Flag
+        motion_detected = False
 
-        if rectangle.any():                                                                     # when object is not in the frame, status is [0,0]
-            status = 1                                                                          # when object enters it changes from [0,0] to [0,1] to [1,1]
-                                                                                                # status stays [1,1] til the object is in frame
-        cv2.imwrite(f"images/{count}.png", frame)                                       # status changes to [1,0] then [0,0] , when the object left the frame , and email is sent
-        count = count + 1                                                                       # used slicing [-2:] to extract last two characters
-        all_images = glob.glob("images/*.png")                                                  # print(status_list) to see results in terminal
-        index = int(len(all_images) / 2)
-        image_with_object = all_images[index]                                                   # used imwrite , image write to save images
-                                                                                                # select all images using glob and select the middle image when object is in the frame
+        for contour in contours:
+            if cv2.contourArea(contour) < 5000:
+                continue
 
+            motion_detected = True  # We found an object large enough
+            x, y, w, h = cv2.boundingRect(contour)
+            cv2.rectangle(img, (x, y), (x + w, y + h), (0, 255, 0), 3)
 
+            # 3. The Rate-Limiting Logic
+            if motion_detected:
+                current_time = time.time()
 
-    status_list.append(status)
-    status_list = status_list[-2:]
+                if (current_time - self.last_email_time) > self.cooldown:
+                    self.last_email_time = current_time
 
+                    # IN-MEMORY UPGRADE:
+                    # Do not touch the hard drive. Encode the image to memory.
+                    success, buffer = cv2.imencode('.png', img)
 
-    if status_list[0] == 1 and status_list[1] == 0:                                             # Our program lags , becuase sed_email and clear_folder function runs simultaneously
-        email_thread = Thread(target=send_email, args=(image_with_object, ))                    # to run program smoothly , used threading ,running multiple flows of execution (threads)
-                                                                                                # concurrently(take turns not parallel) within a single process
-        email_thread.daemon = True
-        clean_thread = Thread(target=clean_folder)
-        # clean_thread.daemon = True                                                              # daemon allows funtion to execute in background while frames are executing
+                    if success:
+                        # Convert the memory buffer to raw bytes
+                        image_bytes = buffer.tobytes()
 
-        email_thread.start()                                                                    # sent email by starting threading
+                        # Pass the bytes directly to the email thread
+                        email_thread = threading.Thread(target=send_email, args=(image_bytes,))
+                        email_thread.start()
 
+        return av.VideoFrame.from_ndarray(img, format="bgr24")
 
 
-    cv2.imshow("Video", frame) # original frame
-    key = cv2.waitKey(1)                                                                        # waitkey is for delay frames capture
+# Streamlit UI
+st.title("Live Motion Security Alert")
+st.write("Grant camera permissions to begin processing.")
 
-    if key == ord("q"):
-        break
-
-video.release()
-
-clean_folder()
-
-clean_thread.start()                                                                            # cleared folder after sending image
-
+webrtc_streamer(
+    key="motion-detector",
+    video_processor_factory=MotionProcessor,
+    rtc_configuration={
+        "iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]
+    }
+)
