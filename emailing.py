@@ -1,37 +1,24 @@
 from email.message import EmailMessage
-import smtplib                                                          # smtplib /for sending emails by connecting to an SMTP or ESMTP server.
-                                                                        # It supports sending plain-text, HTML, and multipart messages with attachments,
-                                                                        # typically requiring a secure connection via SMTP_SSL or starttls()
-
-import imghdr                                                                   # imghdr / a lightweight Python standard library module used to identify
-import os                                                                       # the file format of an image by examining the
-from dotenv import load_dotenv                                                   # first few bytes (the header) of a file or byte stream
-
+import smtplib
+import os
+from dotenv import load_dotenv
 
 load_dotenv()
 PASSWORD = os.getenv("GMAIL_PASSWORD")
 SENDER = "nayan7857@gmail.com"
 RECEIVER = "nayanxyz0@gmail.com"
 
-
-def send_email(image_path):
+def send_email(image_bytes):
     email_message = EmailMessage()
     email_message["Subject"] = "Security Alert"
-    email_message.set_content("someone has arrived at the door")
+    email_message.set_content("Motion detected at the camera.")
 
-    with open(image_path, "rb") as file:                             # read file as binary
-        content = file.read()
-    email_message.add_attachment(content, maintype="image", subtype=imghdr.what(None, content))
+    # We no longer open a file. We just attach the raw bytes directly in memory.
+    email_message.add_attachment(image_bytes, maintype="image", subtype="png")
 
     gmail = smtplib.SMTP("smtp.gmail.com", 587)
-    gmail.ehlo()                                                         # It is the initial handshake that introduces the client to the server .
-                                                                         # It is crucial for establishing a secure connection before providing credentials
-
-    gmail.starttls()                                                     #to upgrade an insecure SMTP connection to a secure one using Transport Layer Security (TLS).
+    gmail.ehlo()
+    gmail.starttls()
     gmail.login(SENDER, PASSWORD)
     gmail.sendmail(SENDER, RECEIVER, email_message.as_string())
     gmail.quit()
-
-if __name__ == "__main__":
-    send_email(image_path="images/53.png")
-
